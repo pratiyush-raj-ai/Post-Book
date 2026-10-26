@@ -1,0 +1,41 @@
+{
+  "entities": {
+    "User": {
+      "path": "users/{userId}",
+      "fields": {
+        "username": { "type": "string", "required": true },
+        "fullName": { "type": "string", "required": true },
+        "avatarUrl": { "type": "string", "required": true },
+        "bio": { "type": "string", "required": false },
+        "website": { "type": "string", "required": false },
+        "postsCount": { "type": "number", "required": false },
+        "followersCount": { "type": "number", "required": false },
+        "followingCount": { "type": "number", "required": false },
+        "createdAt": { "type": "timestamp", "required": true },
+        "updatedAt": { "type": "timestamp", "required": true }
+      }
+    },
+    "Post": {
+      "path": "posts/{postId}",
+      "fields": {
+        "userId": { "type": "string", "required": true },
+        "authorUsername": { "type": "string", "required": true },
+        "authorAvatarUrl": { "type": "string", "required": true },
+        "mediaUrl": { "type": "string", "required": true },
+        "caption": { "type": "string", "required": true },
+        "hashtags": { "type": "array", "items": { "type": "string" }, "required": false },
+        "likesCount": { "type": "number", "required": false },
+        "commentsCount": { "type": "number", "required": false },
+        "createdAt": { "type": "timestamp", "required": true },
+        "updatedAt": { "type": "timestamp", "required": true }
+      }
+    },
+    "SavedPost": {
+      "path": "users/{userId}/saved_posts/{postId}",
+      "fields": {
+        "postId": { "type": "string", "required": true },
+        "savedAt": { "type": "timestamp", "required": true }
+      }
+    }
+  }
+}

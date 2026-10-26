@@ -14,6 +14,17 @@ import java.util.*
 
 object SocialRepository {
     private val scope = CoroutineScope(Dispatchers.Main)
+    private var firestoreRepo: FirestoreRepository? = null
+
+    fun initFirestore(context: android.content.Context) {
+        if (firestoreRepo == null) {
+            try {
+                firestoreRepo = FirestoreRepository(context)
+            } catch (e: Exception) {
+                android.util.Log.w("SocialRepository", "Firestore init skipped: ${e.message}")
+            }
+        }
+    }
 
     private val _currentUser = MutableStateFlow<User?>(SampleDataProvider.currentUser)
     val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
@@ -42,6 +53,19 @@ object SocialRepository {
     private val _isAiTyping = MutableStateFlow(false)
     val isAiTyping: StateFlow<Boolean> = _isAiTyping.asStateFlow()
 
+    suspend fun refreshPostsFromFirestore() {
+        delay(600) // Small delay for natural pull-to-refresh feel
+        val cloudPosts = firestoreRepo?.fetchLatestPosts().orEmpty()
+        if (cloudPosts.isNotEmpty()) {
+            val cloudIds = cloudPosts.map { it.id }.toSet()
+            val merged = cloudPosts + _posts.value.filter { it.id !in cloudIds }
+            _posts.value = merged
+        } else {
+            // Keep local posts refreshed
+            _posts.value = _posts.value.toList()
+        }
+    }
+
     fun login(identifier: String, pass: String): Boolean {
         if (identifier.isNotBlank()) {
             _currentUser.value = SampleDataProvider.currentUser.copy(
@@ -51,6 +75,29 @@ object SocialRepository {
             return true
         }
         return false
+    }
+
+    fun loginWithFirebaseUser(firebaseUser: com.google.firebase.auth.FirebaseUser) {
+        val email = firebaseUser.email ?: ""
+        val username = if (email.contains("@")) email.substringBefore("@") else "creator_${firebaseUser.uid.take(5)}"
+        val user = User(
+            id = firebaseUser.uid,
+            username = username,
+            fullName = firebaseUser.displayName ?: username,
+            avatarUrl = firebaseUser.photoUrl?.toString() ?: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
+            bio = "Visual creator on InstaVibe ✨",
+            website = "",
+            postsCount = 0,
+            followersCount = 1,
+            followingCount = 4,
+            isFollowing = false,
+            isVerified = true
+        )
+        _currentUser.value = user
+        _isAuthenticated.value = true
+        scope.launch {
+            firestoreRepo?.saveUserProfile(user)
+        }
     }
 
     fun loginWithSocial(provider: String) {
@@ -94,11 +141,18 @@ object SocialRepository {
     }
 
     fun toggleSave(postId: String) {
+        var isNowSaved = false
         _posts.value = _posts.value.map { post ->
-            if (post.id == postId) post.copy(isSaved = !post.isSaved) else post
+            if (post.id == postId) {
+                isNowSaved = !post.isSaved
+                post.copy(isSaved = isNowSaved)
+            } else post
         }
         _myPosts.value = _myPosts.value.map { post ->
             if (post.id == postId) post.copy(isSaved = !post.isSaved) else post
+        }
+        scope.launch {
+            firestoreRepo?.toggleSavedPost(postId, isNowSaved)
         }
     }
 
@@ -140,6 +194,9 @@ object SocialRepository {
         _posts.value = listOf(newPost) + _posts.value
         _myPosts.value = listOf(newPost) + _myPosts.value
         _currentUser.value = author.copy(postsCount = author.postsCount + 1)
+        scope.launch {
+            firestoreRepo?.publishPost(newPost)
+        }
     }
 
     fun markStoryViewed(storyId: String) {

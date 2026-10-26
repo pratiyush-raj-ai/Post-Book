@@ -40,6 +40,8 @@ fun MainScreen(
     onToggleDarkMode: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val isAuthenticated by SocialRepository.isAuthenticated.collectAsStateWithLifecycle()
     val notifications by SocialRepository.notifications.collectAsStateWithLifecycle()
     val hasUnreadNotifications = remember(notifications) {
@@ -184,7 +186,11 @@ fun MainScreen(
                     }
                     ScreenTab.PROFILE -> {
                         ProfileScreen(
-                            onLogout = { SocialRepository.logout() }
+                            onLogout = {
+                                com.example.data.FirebaseAuthHelper.signOut(context, coroutineScope) {
+                                    currentTab = ScreenTab.HOME
+                                }
+                            }
                         )
                     }
                 }

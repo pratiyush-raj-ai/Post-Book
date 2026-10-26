@@ -30,6 +30,10 @@ import com.example.ui.components.StoryAvatar
 import com.example.ui.components.StoryViewerDialog
 import com.example.ui.theme.LikeRed
 
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeFeedScreen(
     onNavigateToDMs: () -> Unit,
@@ -37,6 +41,9 @@ fun HomeFeedScreen(
     onToggleDarkMode: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val coroutineScope = rememberCoroutineScope()
+    var isRefreshing by remember { mutableStateOf(false) }
+
     val posts by SocialRepository.posts.collectAsStateWithLifecycle()
     val stories by SocialRepository.stories.collectAsStateWithLifecycle()
     val conversations by SocialRepository.conversations.collectAsStateWithLifecycle()
@@ -118,49 +125,63 @@ fun HomeFeedScreen(
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
 
-        // Main Feed (Stories Header + Post Feed)
-        LazyColumn(
+        // Main Feed with Pull-To-Refresh to fetch latest posts from Firestore
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                isRefreshing = true
+                coroutineScope.launch {
+                    SocialRepository.refreshPostsFromFirestore()
+                    isRefreshing = false
+                }
+            },
             modifier = Modifier
                 .fillMaxSize()
-                .testTag("home_feed_list")
+                .testTag("home_feed_pull_to_refresh")
         ) {
-            // Horizontal Stories Tray
-            item {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("stories_row")
-                ) {
-                    itemsIndexed(stories, key = { _, s -> s.id }) { index, story ->
-                        StoryAvatar(
-                            story = story,
-                            onClick = { viewingStoryIndex = index }
-                        )
-                    }
-                }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-            }
-
-            // Vertical Feed of Posts
-            items(posts, key = { it.id }) { post ->
-                PostCard(
-                    post = post,
-                    onLikeClick = { SocialRepository.toggleLike(post.id) },
-                    onDoubleTapLike = {
-                        if (!post.isLiked) {
-                            SocialRepository.toggleLike(post.id)
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("home_feed_list")
+            ) {
+                // Horizontal Stories Tray
+                item {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("stories_row")
+                    ) {
+                        itemsIndexed(stories, key = { _, s -> s.id }) { index, story ->
+                            StoryAvatar(
+                                story = story,
+                                onClick = { viewingStoryIndex = index }
+                            )
                         }
-                    },
-                    onCommentClick = { activeCommentPost = post },
-                    onSaveClick = { SocialRepository.toggleSave(post.id) }
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
-            }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                }
 
-            item {
-                Spacer(modifier = Modifier.height(80.dp))
+                // Vertical Feed of Posts
+                items(posts, key = { it.id }) { post ->
+                    PostCard(
+                        post = post,
+                        onLikeClick = { SocialRepository.toggleLike(post.id) },
+                        onDoubleTapLike = {
+                            if (!post.isLiked) {
+                                SocialRepository.toggleLike(post.id)
+                            }
+                        },
+                        onCommentClick = { activeCommentPost = post },
+                        onSaveClick = { SocialRepository.toggleSave(post.id) }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(80.dp))
+                }
             }
         }
     }

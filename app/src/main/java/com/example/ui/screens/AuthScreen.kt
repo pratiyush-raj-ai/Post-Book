@@ -1,10 +1,9 @@
 package com.example.ui.screens
 
+import android.app.Activity
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
@@ -17,28 +16,46 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.SocialRepository
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.theme.InstagramGradient
 import com.example.ui.theme.InstaPink
+import com.example.ui.viewmodel.AuthUiState
+import com.example.ui.viewmodel.AuthViewModel
 
 @Composable
 fun AuthScreen(
     onLoginSuccess: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: AuthViewModel = viewModel()
 ) {
+    val context = LocalContext.current
+    val activity = context as? Activity
+
+    val authState by viewModel.uiState.collectAsStateWithLifecycle()
+
     var isSignUp by remember { mutableStateOf(false) }
     var identifier by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var phoneNumber by remember { mutableStateOf("") }
+    var phoneNumber by remember { mutableStateOf("+1 (555) 019-2834") }
+    var otpCode by remember { mutableStateOf("") }
     var showPhoneAuthDialog by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // Handle authentication success
+    LaunchedEffect(authState) {
+        if (authState is AuthUiState.Success) {
+            onLoginSuccess()
+        }
+    }
+
+    val isLoading = authState is AuthUiState.Loading
 
     Box(
         contentAlignment = Alignment.Center,
@@ -90,7 +107,7 @@ fun AuthScreen(
                             )
                             .clickable {
                                 isSignUp = false
-                                errorMessage = null
+                                viewModel.resetState()
                             }
                             .padding(vertical = 10.dp)
                     ) {
@@ -112,7 +129,7 @@ fun AuthScreen(
                             )
                             .clickable {
                                 isSignUp = true
-                                errorMessage = null
+                                viewModel.resetState()
                             }
                             .padding(vertical = 10.dp)
                     ) {
@@ -127,12 +144,12 @@ fun AuthScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Username / Handle Input
+            // Username Input
             OutlinedTextField(
                 value = identifier,
                 onValueChange = {
                     identifier = it
-                    errorMessage = null
+                    if (authState is AuthUiState.Error) viewModel.resetState()
                 },
                 label = { Text("Username or Handle") },
                 leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
@@ -149,7 +166,7 @@ fun AuthScreen(
                     value = email,
                     onValueChange = {
                         email = it
-                        errorMessage = null
+                        if (authState is AuthUiState.Error) viewModel.resetState()
                     },
                     label = { Text("Email Address") },
                     leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
@@ -168,7 +185,7 @@ fun AuthScreen(
                 value = password,
                 onValueChange = {
                     password = it
-                    errorMessage = null
+                    if (authState is AuthUiState.Error) viewModel.resetState()
                 },
                 label = { Text("Password") },
                 leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
@@ -180,10 +197,11 @@ fun AuthScreen(
                     .testTag("auth_password_input")
             )
 
-            if (errorMessage != null) {
+            // Display Error Message if any
+            if (authState is AuthUiState.Error) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = errorMessage.orEmpty(),
+                    text = (authState as AuthUiState.Error).message,
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall
                 )
@@ -191,22 +209,16 @@ fun AuthScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Primary Action Button (Log In or Sign Up)
+            // Primary Action Button (Log In or Sign Up via ViewModel)
             Button(
                 onClick = {
-                    if (identifier.isBlank()) {
-                        errorMessage = "Please enter your username"
-                        return@Button
-                    }
-                    if (password.length < 4) {
-                        errorMessage = "Password must be at least 4 characters"
-                        return@Button
-                    }
-                    val success = SocialRepository.login(identifier, password)
-                    if (success) {
-                        onLoginSuccess()
+                    if (isSignUp) {
+                        viewModel.register(identifier, email, password)
+                    } else {
+                        viewModel.login(identifier, password)
                     }
                 },
+                enabled = !isLoading,
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = InstaPink),
                 modifier = Modifier
@@ -214,11 +226,19 @@ fun AuthScreen(
                     .height(48.dp)
                     .testTag("auth_primary_button")
             ) {
-                Text(
-                    text = if (isSignUp) "Create Account" else "Log In",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
+                if (isLoading && authState is AuthUiState.Loading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(
+                        text = if (isSignUp) "Create Account" else "Log In",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -244,26 +264,32 @@ fun AuthScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Google Login Button
+                // Google Login Button (via ViewModel + Credential Manager)
                 OutlinedButton(
                     onClick = {
-                        SocialRepository.loginWithSocial("google")
-                        onLoginSuccess()
+                        activity?.let { act ->
+                            viewModel.signInWithGoogle(act)
+                        }
                     },
+                    enabled = !isLoading,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .weight(1f)
                         .testTag("auth_google_button")
                 ) {
-                    Text("Google", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    if (isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Google", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    }
                 }
 
                 // Apple Login Button
                 OutlinedButton(
                     onClick = {
-                        SocialRepository.loginWithSocial("apple")
-                        onLoginSuccess()
+                        viewModel.login("alex_apple", "apple123")
                     },
+                    enabled = !isLoading,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .weight(1f)
@@ -272,9 +298,10 @@ fun AuthScreen(
                     Text("Apple", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                 }
 
-                // Mobile Number Login Button
+                // Mobile Number Login Button (via ViewModel + Firebase PhoneAuth)
                 OutlinedButton(
                     onClick = { showPhoneAuthDialog = true },
+                    enabled = !isLoading,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .weight(1f)
@@ -293,8 +320,7 @@ fun AuthScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
-                        SocialRepository.login("alex_rivers", "demo123")
-                        onLoginSuccess()
+                        viewModel.loginDemo()
                     }
                     .padding(vertical = 12.dp, horizontal = 16.dp)
                     .testTag("auth_demo_access_button")
@@ -314,7 +340,7 @@ fun AuthScreen(
             }
         }
 
-        // Phone Authentication Dialog
+        // Phone Authentication Entry Dialog
         if (showPhoneAuthDialog) {
             AlertDialog(
                 onDismissRequest = { showPhoneAuthDialog = false },
@@ -322,7 +348,7 @@ fun AuthScreen(
                 text = {
                     Column {
                         Text(
-                            text = "Enter your mobile phone number to receive an instant verification code.",
+                            text = "Enter your mobile phone number with country code to receive an SMS verification code via Firebase.",
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
@@ -341,15 +367,61 @@ fun AuthScreen(
                     Button(
                         onClick = {
                             showPhoneAuthDialog = false
-                            SocialRepository.loginWithSocial("phone")
-                            onLoginSuccess()
+                            activity?.let { act ->
+                                viewModel.startPhoneVerification(act, phoneNumber)
+                            }
                         }
                     ) {
-                        Text("Send OTP & Log In")
+                        Text("Send SMS Code")
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showPhoneAuthDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        // SMS OTP Verification Dialog (when code is sent by Firebase)
+        val currentOtpState = authState as? AuthUiState.OtpSent
+        if (currentOtpState != null) {
+            AlertDialog(
+                onDismissRequest = { viewModel.resetState() },
+                title = { Text("Enter Verification Code") },
+                text = {
+                    Column {
+                        Text(
+                            text = "Enter the 6-digit code sent to ${currentOtpState.phoneNumber}:",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        OutlinedTextField(
+                            value = otpCode,
+                            onValueChange = { if (it.length <= 6) otpCode = it },
+                            placeholder = { Text("123456") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.verifyOtpCode(
+                                verificationId = currentOtpState.verificationId,
+                                phoneNumber = currentOtpState.phoneNumber,
+                                code = otpCode
+                            )
+                        },
+                        enabled = otpCode.length >= 6
+                    ) {
+                        Text("Verify & Sign In")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.resetState() }) {
                         Text("Cancel")
                     }
                 }
