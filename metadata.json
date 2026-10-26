@@ -1,0 +1,6 @@
+{
+  "name": "InstaVibe",
+  "description": "Instagram-style social app with stories, feeds, AI image generation, and Gemini chatbot in DMs",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
