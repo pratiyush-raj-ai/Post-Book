@@ -57,8 +57,9 @@ fun AuthScreen(
             Text(
                 text = "InstaVibe",
                 style = MaterialTheme.typography.displayMedium.copy(
-                    fontFamily = FontFamily.Serif,
+                    fontFamily = com.example.ui.theme.AppLogoFontFamily,
                     fontWeight = FontWeight.Bold,
+                    fontSize = 46.sp,
                     color = MaterialTheme.colorScheme.onBackground
                 )
             )

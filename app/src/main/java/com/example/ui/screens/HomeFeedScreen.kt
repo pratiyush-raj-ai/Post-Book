@@ -63,9 +63,10 @@ fun HomeFeedScreen(
         ) {
             Text(
                 text = "InstaVibe",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontFamily = FontFamily.Serif,
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    fontFamily = com.example.ui.theme.AppLogoFontFamily,
                     fontWeight = FontWeight.Bold,
+                    fontSize = 32.sp,
                     color = MaterialTheme.colorScheme.onBackground
                 )
             )
